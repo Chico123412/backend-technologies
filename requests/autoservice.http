@@ -1,0 +1,72 @@
+@baseUrl = http://localhost:8080
+@tokenUrl = http://localhost:8081/realms/autoservice/protocol/openid-connect/token
+
+### 1. Отримати JWT адміністратора
+POST {{tokenUrl}}
+Content-Type: application/x-www-form-urlencoded
+
+grant_type=password&client_id=autoservice-api&username=manager&password=manager123
+
+> {% client.global.set("adminToken", response.body.access_token); %}
+
+### 2. Отримати JWT користувача
+POST {{tokenUrl}}
+Content-Type: application/x-www-form-urlencoded
+
+grant_type=password&client_id=autoservice-api&username=client&password=client123
+
+> {% client.global.set("userToken", response.body.access_token); %}
+
+### 3. Без JWT — 401
+GET {{baseUrl}}/api/services
+
+### 4. Створення — 201
+POST {{baseUrl}}/api/services
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{"name":"Заміна масла","description":"Заміна моторної оливи","price":500.00,"durationMinutes":45}
+
+> {% client.global.set("serviceId", response.body.id); %}
+
+### 5. Список — 200
+GET {{baseUrl}}/api/services
+Authorization: Bearer {{userToken}}
+
+### 6. Одна послуга — 200
+GET {{baseUrl}}/api/services/{{serviceId}}
+Authorization: Bearer {{userToken}}
+
+### 7. Оновлення — 200
+PUT {{baseUrl}}/api/services/{{serviceId}}
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{"name":"Заміна масла","description":"Оновлена ціна","price":650.00,"durationMinutes":45}
+
+### 8. SecurityFilterChain: USER — 403
+GET {{baseUrl}}/api/admin/summary
+Authorization: Bearer {{userToken}}
+
+### 9. SecurityFilterChain: ADMIN — 200
+GET {{baseUrl}}/api/admin/summary
+Authorization: Bearer {{adminToken}}
+
+### 10. PreAuthorize: USER — 403, послуга залишається
+DELETE {{baseUrl}}/api/services/{{serviceId}}
+Authorization: Bearer {{userToken}}
+
+### 11. Валідація — 400
+POST {{baseUrl}}/api/services
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{"name":"","price":-1,"durationMinutes":0}
+
+### 12. Видалення — 204
+DELETE {{baseUrl}}/api/services/{{serviceId}}
+Authorization: Bearer {{adminToken}}
+
+### 13. Видаленої послуги немає — 404
+GET {{baseUrl}}/api/services/{{serviceId}}
+Authorization: Bearer {{adminToken}}
