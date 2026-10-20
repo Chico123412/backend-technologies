@@ -7,6 +7,7 @@ import com.autoservice.mapper.ServiceMapper;
 import com.autoservice.repository.ServiceRepository;
 import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
@@ -32,11 +33,13 @@ public class CatalogService {
     }
 
     @Transactional
+    @PreAuthorize("hasRole('ADMIN')")
     public ServiceResponse create(ServiceRequest request) {
         return mapper.toResponse(repository.save(mapper.toEntity(request)));
     }
 
     @Transactional
+    @PreAuthorize("hasRole('ADMIN')")
     public ServiceResponse update(long id, ServiceRequest request) {
         ServiceItem item = findEntity(id);
         mapper.update(request, item);
@@ -44,6 +47,7 @@ public class CatalogService {
     }
 
     @Transactional
+    @PreAuthorize("hasRole('ADMIN')")
     public void delete(long id) {
         repository.delete(findEntity(id));
     }

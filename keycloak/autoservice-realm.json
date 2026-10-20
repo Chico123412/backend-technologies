@@ -1,0 +1,128 @@
+{
+  "realm": "autoservice",
+  "enabled": true,
+  "displayName": "Автосервіс",
+  "sslRequired": "external",
+  "registrationAllowed": false,
+  "roles": {
+    "realm": [
+      {
+        "name": "USER"
+      },
+      {
+        "name": "ADMIN"
+      }
+    ]
+  },
+  "clients": [
+    {
+      "clientId": "autoservice-web",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "secret": "autoservice-web-secret",
+      "standardFlowEnabled": true,
+      "directAccessGrantsEnabled": false,
+      "fullScopeAllowed": true,
+      "redirectUris": [
+        "http://localhost:8080/login/oauth2/code/keycloak"
+      ],
+      "webOrigins": [
+        "http://localhost:8080"
+      ],
+      "attributes": {
+        "post.logout.redirect.uris": "http://localhost:8080/*"
+      },
+      "defaultClientScopes": [
+        "profile",
+        "email",
+        "roles"
+      ],
+      "protocolMappers": [
+        {
+          "name": "realm-roles",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-realm-role-mapper",
+          "consentRequired": false,
+          "config": {
+            "multivalued": "true",
+            "claim.name": "realm_access.roles",
+            "jsonType.label": "String",
+            "access.token.claim": "true",
+            "id.token.claim": "true",
+            "userinfo.token.claim": "true"
+          }
+        }
+      ]
+    },
+    {
+      "clientId": "autoservice-api",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": true,
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": true,
+      "fullScopeAllowed": true,
+      "defaultClientScopes": [
+        "profile",
+        "email",
+        "roles"
+      ],
+      "protocolMappers": [
+        {
+          "name": "realm-roles",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-realm-role-mapper",
+          "consentRequired": false,
+          "config": {
+            "multivalued": "true",
+            "claim.name": "realm_access.roles",
+            "jsonType.label": "String",
+            "access.token.claim": "true",
+            "id.token.claim": "true",
+            "userinfo.token.claim": "true"
+          }
+        }
+      ]
+    }
+  ],
+  "users": [
+    {
+      "username": "manager",
+      "enabled": true,
+      "emailVerified": true,
+      "firstName": "Manager",
+      "lastName": "User",
+      "email": "manager@example.com",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "manager123",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "USER",
+        "ADMIN"
+      ]
+    },
+    {
+      "username": "client",
+      "enabled": true,
+      "emailVerified": true,
+      "firstName": "Client",
+      "lastName": "User",
+      "email": "client@example.com",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "client123",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "USER"
+      ]
+    }
+  ]
+}

@@ -3,6 +3,7 @@ package com.autoservice.controller;
 import com.autoservice.dto.ServiceRequest;
 import com.autoservice.service.CatalogService;
 import jakarta.validation.Valid;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.validation.BindingResult;
@@ -20,8 +21,9 @@ public class CatalogPageController {
     }
 
     @ModelAttribute("canEdit")
-    public boolean canEdit() {
-        return true;
+    public boolean canEdit(org.springframework.security.core.Authentication authentication) {
+        return authentication != null && authentication.getAuthorities().stream()
+                .anyMatch(authority -> authority.getAuthority().equals("ROLE_ADMIN"));
     }
 
     @GetMapping
@@ -30,6 +32,7 @@ public class CatalogPageController {
         return "catalog";
     }
 
+    @PreAuthorize("hasRole('ADMIN')")
     @GetMapping("/new")
     public String newForm(Model model) {
         model.addAttribute("form", new ServiceRequest("", "", new BigDecimal("100.00"), 30));
@@ -37,6 +40,7 @@ public class CatalogPageController {
         return "service-form";
     }
 
+    @PreAuthorize("hasRole('ADMIN')")
     @PostMapping
     public String create(@Valid @ModelAttribute("form") ServiceRequest form, BindingResult errors,
                          Model model, RedirectAttributes redirect) {
@@ -49,6 +53,7 @@ public class CatalogPageController {
         return "redirect:/services";
     }
 
+    @PreAuthorize("hasRole('ADMIN')")
     @GetMapping("/{id}/edit")
     public String editForm(@PathVariable long id, Model model) {
         var item = service.findById(id);
@@ -57,6 +62,7 @@ public class CatalogPageController {
         return "service-form";
     }
 
+    @PreAuthorize("hasRole('ADMIN')")
     @PostMapping("/{id}")
     public String update(@PathVariable long id, @Valid @ModelAttribute("form") ServiceRequest form,
                          BindingResult errors, Model model, RedirectAttributes redirect) {
@@ -69,6 +75,7 @@ public class CatalogPageController {
         return "redirect:/services";
     }
 
+    @PreAuthorize("hasRole('ADMIN')")
     @PostMapping("/{id}/delete")
     public String delete(@PathVariable long id, RedirectAttributes redirect) {
         service.delete(id);

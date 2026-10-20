@@ -12,5 +12,25 @@ spring:
   liquibase:
     change-log: classpath:db/changelog/db.changelog-master.yaml
 
+  security:
+    oauth2:
+      client:
+        registration:
+          keycloak:
+            client-id: autoservice-web
+            client-secret: autoservice-web-secret
+            authorization-grant-type: authorization_code
+            scope: openid, profile, email
+        provider:
+          keycloak:
+            issuer-uri: ${app.keycloak-url}/realms/autoservice
+      resourceserver:
+        jwt:
+          issuer-uri: ${app.keycloak-url}/realms/autoservice
+          jwk-set-uri: ${app.keycloak-url}/realms/autoservice/protocol/openid-connect/certs
+
+app:
+  keycloak-url: ${KEYCLOAK_URL:http://localhost:8081}
+
 server:
   port: 8080
