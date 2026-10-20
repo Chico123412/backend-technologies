@@ -1,0 +1,30 @@
+* { box-sizing: border-box; }
+body { margin: 0; background: #f3f5f7; color: #203040; font: 16px/1.5 Arial, sans-serif; }
+.container { max-width: 1120px; margin: 48px auto; padding: 0 24px; }
+.narrow { max-width: 760px; }
+.welcome { max-width: 760px; margin-top: 15vh; }
+.welcome h1 { font-size: 46px; }
+h1 { margin: 0 0 10px; font-size: 32px; }
+.eyebrow { margin: 0 0 6px; color: #63788a; font-size: 12px; text-transform: uppercase; letter-spacing: .12em; }
+header, nav { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.panel { margin-top: 28px; padding: 24px; border: 1px solid #e0e6eb; border-radius: 12px; background: white; }
+a { color: #126d60; }
+.button { display: inline-block; border: 0; padding: 11px 18px; border-radius: 6px; background: #137b69; color: white; text-decoration: none; cursor: pointer; font: inherit; }
+.secondary { background: #e7edf0; color: #354957; }
+.form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+.wide { grid-column: 1 / -1; }
+label { display: grid; gap: 7px; }
+input, textarea { width: 100%; padding: 10px; border: 1px solid #bfccd6; border-radius: 6px; font: inherit; }
+input:focus, textarea:focus { outline: 2px solid #9fd6c8; }
+small { color: #ae3030; }
+.table-wrap { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; text-align: left; }
+th, td { padding: 14px 10px; border-bottom: 1px solid #e5eaee; vertical-align: top; }
+th { color: #63788a; font-size: 13px; }
+.nowrap, .actions { white-space: nowrap; }
+.actions form { display: inline; }
+.link { padding: 0; margin-left: 10px; border: 0; background: none; font: inherit; text-decoration: underline; cursor: pointer; }
+.danger { color: #ad3030; }
+.notice { padding: 12px 16px; border-radius: 6px; background: #dff1e9; }
+.empty { padding: 30px; text-align: center; color: #63788a; }
+@media(max-width: 650px) { .container { margin-top: 24px; padding: 0 14px; } header { align-items: flex-start; flex-direction: column; } .form-grid { grid-template-columns: 1fr; } .wide { grid-column: auto; } .panel { padding: 16px; } .welcome h1 { font-size: 34px; } }

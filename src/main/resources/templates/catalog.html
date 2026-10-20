@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="uk" xmlns:th="http://www.thymeleaf.org">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Каталог послуг</title><link rel="stylesheet" th:href="@{/css/style.css}"></head>
+<body><main class="container">
+    <header><div><p class="eyebrow">Автосервіс</p><h1>Каталог послуг</h1></div>
+        <nav><a class="button" th:if="${canEdit}" href="/services/new">Додати послугу</a>
+            <form th:action="@{/logout}" method="post"><button class="button secondary">Вийти</button></form></nav>
+    </header>
+    <p class="notice" th:if="${message}" th:text="${message}"></p>
+    <section class="panel table-wrap"><table>
+        <thead><tr><th>Послуга</th><th>Опис</th><th>Ціна</th><th>Тривалість</th><th th:if="${canEdit}">Дії</th></tr></thead>
+        <tbody><tr th:each="item : ${services}">
+            <td><strong th:text="${item.name}"></strong></td><td th:text="${item.description}"></td>
+            <td class="nowrap" th:text="|${#numbers.formatDecimal(item.price, 1, 2)} грн|"></td><td class="nowrap" th:text="|${item.durationMinutes} хв|"></td>
+            <td th:if="${canEdit}" class="actions"><a th:href="@{/services/{id}/edit(id=${item.id})}">Змінити</a>
+                <form th:action="@{/services/{id}/delete(id=${item.id})}" method="post"><button class="link danger">Видалити</button></form></td>
+        </tr><tr th:if="${#lists.isEmpty(services)}"><td colspan="5" class="empty">У каталозі поки немає послуг.</td></tr></tbody>
+    </table></section>
+</main></body></html>
