@@ -1,5 +1,22 @@
 # Автосервіс
 
+
+## Лабораторна №2
+
+Гілка: `lab-2-unit-testing`. У ній додані ізольовані unit-тести без запуску Spring,
+поріг JaCoCo 60% для всього написаного коду та перевірка навмисної помилки.
+
+```bash
+./mvnw clean verify
+bash scripts/check-mutation.sh
+```
+
+Звіт покриття: `target/site/jacoco/index.html`.
+Доказ падіння та відновлення тесту: `docs/mutation-evidence/`.
+Деталі й відповідність критеріям: [docs/LAB2.md](docs/LAB2.md).
+Для unit-тестів Docker і запущений застосунок не потрібні.
+
+
 Семестровий проєкт з дисципліни «Технології Back-end».
 Предметна область — каталог послуг автосервісу з можливістю подальшого додавання
 клієнтів, автомобілів та записів на обслуговування.
@@ -81,15 +98,15 @@ docker compose exec postgres psql -U autoservice -d autoservice -c 'SELECT * FRO
 ## Перевірки
 
 ```bash
-./mvnw clean test
-./mvnw package
+./mvnw clean verify
+./mvnw -Pintegration-tests verify
 ```
 
-Інтеграційні тести використовують H2 у PostgreSQL mode та справжню міграцію Liquibase.
-Вони перевіряють CRUD із фактичним збереженням через repository, валідацію, 401/403,
-обидва рівні авторизації, розділення API та UI-сесії, OIDC-редирект, UI-форми та CSRF.
-JWT decoder та OAuth2 client registration підмінені в тестах: Docker для них не потрібний.
-Реальний вхід і підпис JWT перевіряються запущеним Keycloak та HTTP/Postman-запитами.
+Перша команда запускає unit-тести та перевіряє поріг покриття JaCoCo.
+Друга додатково запускає інтеграційні перевірки з першої лабораторної.
+Для останніх використовуються H2 та справжня міграція Liquibase;
+JWT decoder і OAuth2 client registration підмінені в тестах.
+Реальний вхід та підпис JWT перевіряються через запущений Keycloak і готові HTTP-запити.
 
 ## Структура
 

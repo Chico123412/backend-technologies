@@ -1,0 +1,5 @@
+Baseline: PASS
+Mutation: detected (1 assertion failure, no test errors)
+Restored: PASS
+Full verify: PASS
+Original production source: restored byte-for-byte

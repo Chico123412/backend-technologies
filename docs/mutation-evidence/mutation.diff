@@ -1,0 +1,13 @@
+diff --git a/src/main/java/com/autoservice/service/CatalogService.java b/src/main/java/com/autoservice/service/CatalogService.java
+index 6112b3c..67f0327 100644
+--- a/src/main/java/com/autoservice/service/CatalogService.java
++++ b/src/main/java/com/autoservice/service/CatalogService.java
+@@ -42,7 +42,7 @@ public class CatalogService {
+     @PreAuthorize("hasRole('ADMIN')")
+     public ServiceResponse update(long id, ServiceRequest request) {
+         ServiceItem item = findEntity(id);
+-        mapper.update(request, item);
++        // mutation check: mapping update omitted
+         return mapper.toResponse(repository.save(item));
+     }
+ 
