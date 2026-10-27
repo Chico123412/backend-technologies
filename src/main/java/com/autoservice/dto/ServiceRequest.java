@@ -1,8 +1,10 @@
 package com.autoservice.dto;
 
+import com.autoservice.validation.ValidServiceDetails;
 import jakarta.validation.constraints.*;
 import java.math.BigDecimal;
 
+@ValidServiceDetails
 public record ServiceRequest(
         @NotBlank(message = "Вкажіть назву") @Size(max = 120) String name,
         @Size(max = 1000) String description,
