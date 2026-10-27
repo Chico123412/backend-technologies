@@ -162,6 +162,52 @@ class CatalogIntegrationTest {
         assertThat(repository.findAll()).singleElement().extracting("name").isEqualTo("Діагностика");
     }
 
+    @Test
+    void profileUsesUsernameResolvedFromBearerToken() throws Exception {
+        var jwt = Jwt.withTokenValue("profile-token").header("alg", "RS256").subject("internal-id")
+                .claim("preferred_username", "client")
+                .claim("realm_access", Map.of("roles", List.of("USER"))).build();
+        when(decoder.decode("profile-token")).thenReturn(jwt);
+
+        mvc.perform(get("/api/profile").header("Authorization", "Bearer profile-token"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.username").value("client"));
+    }
+
+    @Test
+    void profileWithoutTokenReturns401() throws Exception {
+        mvc.perform(get("/api/profile")).andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void longServiceWithoutDescriptionIsRejectedThroughApi() throws Exception {
+        String body = """
+                {"name":"Діагностика","description":" ","price":300,"durationMinutes":90}
+                """;
+        mvc.perform(post("/api/services").header("Authorization", "Bearer admin-token")
+                        .contentType("application/json").content(body))
+                .andExpect(status().isBadRequest());
+        assertThat(repository.count()).isZero();
+    }
+
+    @Test
+    void longServiceWithDescriptionIsAcceptedThroughApi() throws Exception {
+        mvc.perform(post("/api/services").header("Authorization", "Bearer admin-token")
+                        .contentType("application/json").content(BODY.replace("45", "90")))
+                .andExpect(status().isCreated()).andExpect(jsonPath("$.durationMinutes").value(90));
+        assertThat(repository.count()).isEqualTo(1);
+    }
+
+    @Test
+    void longServiceWithoutDescriptionShowsFieldErrorInUi() throws Exception {
+        mvc.perform(post("/services").with(oidcLogin().authorities(new SimpleGrantedAuthority("ROLE_ADMIN")))
+                        .with(csrf()).param("name", "Діагностика").param("description", " ")
+                        .param("price", "300").param("durationMinutes", "90"))
+                .andExpect(status().isOk()).andExpect(view().name("service-form"))
+                .andExpect(model().attributeHasFieldErrors("form", "description"))
+                .andExpect(content().string(containsString("Для послуги тривалістю понад 60 хвилин потрібно вказати опис")));
+        assertThat(repository.count()).isZero();
+    }
+
     private Jwt token(String value, String role) {
         return Jwt.withTokenValue(value).header("alg", "RS256").subject("test-user")
                 .issuedAt(Instant.now()).expiresAt(Instant.now().plusSeconds(300))
