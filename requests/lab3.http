@@ -1,0 +1,41 @@
+@baseUrl = http://localhost:8080
+@tokenUrl = http://localhost:8081/realms/autoservice/protocol/openid-connect/token
+
+### Отримати токен адміністратора
+POST {{tokenUrl}}
+Content-Type: application/x-www-form-urlencoded
+
+grant_type=password&client_id=autoservice-api&username=manager&password=manager123
+
+> {% client.global.set("lab3Token", response.body.access_token); %}
+
+### Ім’я з JWT — 200, username: manager
+GET {{baseUrl}}/api/profile
+Authorization: Bearer {{lab3Token}}
+
+### Без токена — 401
+GET {{baseUrl}}/api/profile
+
+### Композитна анотація зберігає маршрут — 200
+GET {{baseUrl}}/api/services
+Authorization: Bearer {{lab3Token}}
+
+### Понад годину без опису — 400
+POST {{baseUrl}}/api/services
+Authorization: Bearer {{lab3Token}}
+Content-Type: application/json
+
+{"name":"Діагностика двигуна","description":" ","price":600.00,"durationMinutes":90}
+
+### Понад годину з описом — 201
+POST {{baseUrl}}/api/services
+Authorization: Bearer {{lab3Token}}
+Content-Type: application/json
+
+{"name":"Діагностика двигуна","description":"Перевірка систем двигуна","price":600.00,"durationMinutes":90}
+
+> {% client.global.set("lab3ServiceId", response.body.id); %}
+
+### Видалити створену послугу — 204
+DELETE {{baseUrl}}/api/services/{{lab3ServiceId}}
+Authorization: Bearer {{lab3Token}}
