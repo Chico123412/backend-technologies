@@ -1,5 +1,6 @@
 package com.autoservice.controller;
 
+import com.autoservice.annotation.ApiController;
 import com.autoservice.dto.ServiceRequest;
 import com.autoservice.dto.ServiceResponse;
 import com.autoservice.service.CatalogService;
@@ -9,8 +10,7 @@ import org.springframework.web.bind.annotation.*;
 import java.net.URI;
 import java.util.List;
 
-@RestController
-@RequestMapping("/api/services")
+@ApiController("/api/services")
 public class ServiceController {
     private final CatalogService service;
 

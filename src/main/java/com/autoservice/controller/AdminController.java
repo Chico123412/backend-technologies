@@ -1,11 +1,11 @@
 package com.autoservice.controller;
 
+import com.autoservice.annotation.ApiController;
 import com.autoservice.repository.ServiceRepository;
 import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.RestController;
 import java.util.Map;
 
-@RestController
+@ApiController("/api/admin")
 public class AdminController {
     private final ServiceRepository repository;
 
@@ -13,7 +13,7 @@ public class AdminController {
         this.repository = repository;
     }
 
-    @GetMapping("/api/admin/summary")
+    @GetMapping("/summary")
     public Map<String, Long> summary() {
         return Map.of("serviceCount", repository.count());
     }
