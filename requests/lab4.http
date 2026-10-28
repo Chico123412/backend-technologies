@@ -1,0 +1,69 @@
+@baseUrl = http://localhost:8080
+@tokenUrl = http://localhost:8081/realms/autoservice/protocol/openid-connect/token
+
+### Токен адміністратора
+POST {{tokenUrl}}
+Content-Type: application/x-www-form-urlencoded
+
+grant_type=password&client_id=autoservice-api&username=manager&password=manager123
+
+> {% client.global.set("lab4AdminToken", response.body.access_token); %}
+
+### Створити послугу з ціною 100.01 — 201 (звичайний режим)
+POST {{baseUrl}}/api/services
+Authorization: Bearer {{lab4AdminToken}}
+Content-Type: application/json
+
+{"name":"Діагностика","description":"Огляд авто","price":100.01,"durationMinutes":30}
+
+> {% client.global.set("lab4Id", response.body.id); %}
+
+### Через проксі — 200, total 190.02
+POST {{baseUrl}}/api/quotes
+Authorization: Bearer {{lab4AdminToken}}
+Content-Type: application/json
+
+[{{lab4Id}}, {{lab4Id}}]
+
+### Через this — 200, total 190.0190 (аспект не спрацьовує)
+POST {{baseUrl}}/api/quotes/self-invocation
+Authorization: Bearer {{lab4AdminToken}}
+Content-Type: application/json
+
+[{{lab4Id}}, {{lab4Id}}]
+
+### Порожній список — 400
+POST {{baseUrl}}/api/quotes
+Authorization: Bearer {{lab4AdminToken}}
+Content-Type: application/json
+
+[]
+
+### 11 позицій через проксі — 400
+POST {{baseUrl}}/api/quotes
+Authorization: Bearer {{lab4AdminToken}}
+Content-Type: application/json
+
+[{{lab4Id}}, {{lab4Id}}, {{lab4Id}}, {{lab4Id}}, {{lab4Id}}, {{lab4Id}}, {{lab4Id}}, {{lab4Id}}, {{lab4Id}}, {{lab4Id}}, {{lab4Id}}]
+
+### 11 позицій через this — 200, total 1045.1045 (обхід ліміту за умовою лаби)
+POST {{baseUrl}}/api/quotes/self-invocation
+Authorization: Bearer {{lab4AdminToken}}
+Content-Type: application/json
+
+[{{lab4Id}}, {{lab4Id}}, {{lab4Id}}, {{lab4Id}}, {{lab4Id}}, {{lab4Id}}, {{lab4Id}}, {{lab4Id}}, {{lab4Id}}, {{lab4Id}}, {{lab4Id}}]
+
+### Видалити тестову послугу в звичайному режимі — 204
+DELETE {{baseUrl}}/api/services/{{lab4Id}}
+Authorization: Bearer {{lab4AdminToken}}
+
+### ОКРЕМО: після перезапуску з --autoservice.catalog.read-only=true — 503
+POST {{baseUrl}}/api/services
+Authorization: Bearer {{lab4AdminToken}}
+Content-Type: application/json
+
+{"name":"Тест режиму","description":"Огляд авто","price":100.01,"durationMinutes":30}
+
+### Читання в режимі лише читання — 200
+GET {{baseUrl}}/api/services
+Authorization: Bearer {{lab4AdminToken}}

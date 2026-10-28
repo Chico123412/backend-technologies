@@ -1,109 +1,120 @@
 # Автосервіс
 
 Навчальний проєкт з дисципліни «Технології Back-end».
-Каталог послуг: назва, опис, ціна та тривалість. Адміністратор може додавати,
-редагувати й видаляти послуги, клієнт — переглядати каталог.
+Каталог послуг автосервісу з ролями ADMIN і USER.
 
-## Лабораторна №3. Анотації
+## Лабораторна №4. AOP
 
-Гілка: `lab-3-annotations`.
-Мета — реалізувати три власні анотації з різними механізмами роботи у Spring Boot.
+Гілка: `lab-4-aop`.
+Мета — винести наскрізну поведінку у три пари «власна анотація + аспект»
+та показати різницю між зовнішнім викликом і self-invocation.
 
-### 1. Валідація даних послуги
+### Що реалізовано
 
-`@ValidServiceDetails` стоїть на DTO `ServiceRequest`.
-У проєкті прийнято правило: для послуги тривалістю понад 60 хвилин потрібно
-заповнити опис. Для коротших послуг опис залишається необов’язковим.
-Правило пов’язує два поля DTO, тому перевіряється на рівні класу.
+Файли розміщені в `src/main/java/com/autoservice/`.
 
-Файли в `src/main/java/com/autoservice/`:
+| Анотація | Аспект | Поведінка та місце використання |
+| --- | --- | --- |
+| `annotation/RoundMoney.java` | `aspect/RoundMoneyAspect.java` | Результат BigDecimal округлюється до 2 знаків, HALF_UP. Використано на `QuoteService.calculateTotal` |
+| `annotation/LimitBatchSize.java` | `aspect/LimitBatchSizeAspect.java` | Перевіряється перший аргумент-список: від 1 до max елементів без null. Порушення дає 400 без виконання методу. Використано на тому самому розрахунку, max = 10 |
+| `annotation/CatalogWritable.java` | `aspect/CatalogWritableAspect.java` | У режимі «лише читання» зміни каталогу дають 503 без виконання методу. Використано на `CatalogService.create`, `update`, `delete` |
 
-- `validation/ValidServiceDetails.java` — constraint-анотація з `@Constraint`.
-- `validation/ServiceDetailsValidator.java` — перевірка тривалості та опису.
-- `dto/ServiceRequest.java` — застосування анотації.
+Усі три анотації мають `@Target(METHOD)` та `@Retention(RUNTIME)`.
+Кожен аспект — Spring-компонент з `@Aspect` і `@Around`; pointcut використовує
+`@annotation(...)`. Додана залежність `spring-boot-starter-aop` у `pom.xml`.
+Проксі у застосунку налаштовує Spring Boot, вручну advice у робочому коді не викликаються.
 
-Bean Validation знаходить валідатор через `validatedBy`, вручну в контролерах
-він не створюється. Наявний `@Valid` запускає перевірку для API та форми.
-Порушення прив’язане до поля `description`, тому повідомлення видно біля
-поля опису. API повертає 400. Відсутню тривалість окремо перевіряє `@NotNull`.
+`service/QuoteService.java` розраховує загальну вартість вибраних послуг.
+Для двох і більше позицій діє знижка 5%; повторний ID означає повторну позицію.
+Округлення й обмеження розміру винесені в аспекти та не дублюються в розрахунку.
+Обмеження виконується перед округленням завдяки `@Order(100)` і `@Order(200)`.
+Аспект режиму каталогу має порядок 300, після стандартної перевірки `@PreAuthorize`.
+Авторизація й транзакції попередніх лабораторних збережені.
 
-### 2. Композитна анотація
+### Навмисний self-invocation
 
-`annotation/ApiController.java` об’єднує `@RestController` і `@RequestMapping`.
-Шлях передається через `@AliasFor`. Анотація використовується в
-`ServiceController`, `AdminController` та `ProfileController`.
+`QuoteService.calculateTotalInternally` викликає **той самий** анотований метод
+через `this.calculateTotal(serviceIds)`. Це свідома демонстрація умови лабораторної.
+Внутрішній виклик не проходить через проксі, тому ні округлення, ні обмеження
+розміру на `calculateTotal` не спрацьовують. Помилка чи попередження не виникає.
+Самовиклик навмисно залишено; self-injection і AopContext не використовуються.
 
-Приклад: `@ApiController("/api/services")` замінює дві окремі анотації.
-Маршрути каталогу, JSON-відповіді та HTTP-статуси залишилися тими самими.
+`controller/QuoteController.java` дає два способи порівняти поведінку:
 
-### 3. Параметр поточного користувача
+| Запит | Шлях виклику | Приклад результату |
+| --- | --- | --- |
+| `POST /api/quotes` | Контролер → проксі → calculateTotal | `{"total":190.02}` |
+| `POST /api/quotes/self-invocation` | Контролер → проксі → calculateTotalInternally → this.calculateTotal | `{"total":190.0190}` |
 
-`@CurrentUsername` дозволяє отримати ім’я користувача в параметрі методу контролера.
+Приклад: дві позиції по 100,01 грн. Після знижки: `200.02 × 0.95 = 190.0190`.
+У першому випадку аспект змінює результат, у другому — ні.
+Клієнт JSON може відобразити другий результат як `190.019`, що є тим самим числом.
+Тіло запиту — список ID, наприклад `[1, 1]`; ID має існувати в каталозі.
+Обидва ендпоінти потребують Bearer JWT. Другий — навчальна демонстрація обходу аспектів,
+для звичайного розрахунку призначений перший.
 
-- `annotation/CurrentUsername.java` — анотація параметра.
-- `web/CurrentUsernameResolver.java` — `HandlerMethodArgumentResolver`.
-- `config/WebConfig.java` — реєстрація резолвера через `WebMvcConfigurer`.
-- `controller/ProfileController.java` — `GET /api/profile`.
+### Режим «лише читання»
 
-Резолвер підтримує лише `String` з `@CurrentUsername`. Він бере
-`preferred_username` з JWT або OAuth2-користувача. Якщо атрибут відсутній чи
-порожній, використовується `Authentication.getName()`.
-Без автентифікації повертається 401. Контролер використовує отримане ім’я
-у JSON-відповіді, наприклад `{"username":"client"}`.
-API, як і раніше, потребує Bearer JWT; сесія входу в UI його не замінює.
+За замовчуванням вимкнений: `autoservice.catalog.read-only=false`.
+Для перевірки зупинити застосунок і запустити з параметром:
 
-### Перевірки
+```bash
+./mvnw spring-boot:run -Dspring-boot.run.arguments="--autoservice.catalog.read-only=true"
+```
+
+Адміністратор зможе читати каталог, але POST/PUT/DELETE послуг повертатимуть 503.
+Читання й розрахунок вартості залишаються доступними.
+Повернення до звичайного запуску вимикає цей режим.
+
+### Тести й відповідність умові
 
 ```bash
 ./mvnw clean verify
 ./mvnw -Pintegration-tests verify
 ```
 
-Перша команда запускає модульні тести й перевірку покриття JaCoCo.
-Друга додатково виконує інтеграційні тести з Spring, H2 та MockMvc.
-Docker для цих тестів не потрібен, зовнішній Keycloak у тестах підмінений.
+Модульні тести аспектів викликають advice без Spring-контексту.
+`ProceedingJoinPoint` замоканий через Mockito: перевіряються результат,
+винятки, виклик `proceed()` і відсутність цього виклику при відмові.
 
-Нові тести в `src/test/java/com/autoservice/`:
+Файли в `src/test/java/com/autoservice/`:
 
-| Файл | Що перевіряється |
-| --- | --- |
-| `validation/ServiceDetailsValidatorTest.java` | Автоматичний виклик валідатора, допустимі дані, межа 60/61 хв, порожній опис і текст помилки (AC1–3) |
-| `annotation/ApiControllerTest.java` | Маршрути, JSON, статус і порівняння з окремими стандартними анотаціями (AC4–5) |
-| `web/CurrentUsernameResolverTest.java` | supportsParameter, JWT/OAuth2, резервне ім’я та відмова без входу (AC6–7) |
-| `controller/ProfileControllerTest.java` | Виклик через MVC з зареєстрованим резолвером і використання імені у відповіді (AC8) |
-| `CatalogIntegrationTest.java` | Додані запити до профілю через Bearer JWT, перевірка нового правила через API і форму (AC3, AC8) |
+- `aspect/RoundMoneyAspectTest.java` — дроби, середина округлення, цілі значення, null і виняток цільового методу.
+- `aspect/LimitBatchSizeAspectTest.java` — допустимий список, межі 10/11, порожній список, null та відмова до proceed.
+- `aspect/CatalogWritableAspectTest.java` — звичайний режим, блокування запису й передавання винятку.
+- `service/QuoteServiceTest.java` — розрахунок, знижка та помилка відсутньої послуги.
+- `controller/QuoteControllerTest.java` — два шляхи виклику з контролера.
+- `aspect/CatalogAspectsIntegrationTest.java` — справжні Spring-проксі, зовнішній виклик проти self-invocation, блокування трьох операцій запису та доступність читання.
+- `CatalogIntegrationTest.java` — додано HTTP-перевірку обох розрахунків через MVC і справжній security filter chain, а також відповіді 400.
 
-Результат перевірки: 70 модульних і 17 інтеграційних тестів пройшли без помилок.
-Покриття рядків модульними тестами — 83,21%, `CatalogService` — 100%.
-Звіт JaCoCo: `target/site/jacoco/index.html`.
-Запити для ручної перевірки: `requests/lab3.http`, виконуються зверху вниз
-у HTTP Client IntelliJ за наявності цієї можливості в IDE. Postman не потрібен.
+Результат: 93 модульні та 24 інтеграційні тести пройшли без помилок.
+Покриття рядків модульними тестами — 86,23%, CatalogService — 100%.
+Перша команда запускає модульні тести й JaCoCo, друга додає інтеграційні тести.
+Для тестів Docker не потрібен: інтеграційні перевірки використовують H2 або mock repository.
+Зовнішній Keycloak у тестах підмінений. Звіт покриття: `target/site/jacoco/index.html`.
+
+Запити для ручної перевірки — `requests/lab4.http`, запускати зверху вниз.
+Окремо позначений запит для режиму «лише читання» виконується після перезапуску з параметром вище.
 
 ## Запуск застосунку
 
-Java 17+ (локально можна JDK 25), Maven Wrapper, Docker Desktop.
-Spring Boot, PostgreSQL, Liquibase, MapStruct, Thymeleaf і Keycloak залишені
-з попередніх лабораторних. Нові залежності у третій лабораторній не додавалися.
+Java 17+ (можна JDK 25), Maven Wrapper, Docker Desktop.
 
 1. Запустити Docker Desktop.
-2. У корені проєкту виконати `docker compose up -d --wait`.
-3. Дочекатися відкриття `http://localhost:8081/realms/autoservice/.well-known/openid-configuration`.
+2. Виконати `docker compose up -d --wait` у корені проєкту.
+3. Дочекатися доступності `http://localhost:8081/realms/autoservice/.well-known/openid-configuration`.
 4. Виконати `./mvnw spring-boot:run`.
 5. Відкрити `http://localhost:8080/services`.
 
-Демонстраційні користувачі: `manager` / `manager123` (ADMIN),
-`client` / `client123` (USER). Консоль Keycloak — `http://localhost:8081`,
-`admin` / `admin`. Це дані лише для локального запуску.
-PostgreSQL: `localhost:55432`, база і користувач `autoservice`, пароль `autoservice_dev`.
-Схему створює Liquibase; Hibernate перевіряє її через `ddl-auto: validate`.
+Демонстраційні користувачі: `manager` / `manager123` (ADMIN), `client` / `client123` (USER).
+Консоль Keycloak: `http://localhost:8081`, `admin` / `admin`.
+PostgreSQL: `localhost:55432`, база та користувач `autoservice`, пароль `autoservice_dev`.
+Це облікові дані для локального запуску. Схему створює Liquibase.
 
 ## Попередні лабораторні
 
-- №1: CRUD каталогу (`controller`, `service`, `repository`, `entity`, `dto`, `mapper`),
-  міграції (`src/main/resources/db/changelog`), сторінки (`templates`),
-  авторизація (`config/SecurityConfig.java`) та Keycloak (`docker-compose.yml`, `keycloak`).
-  Готові запити — `requests/autoservice.http`.
-- №2: ізольовані тести сервісу, контролерів, мапера й ролей у `src/test/java`,
-  налаштування JaCoCo в `pom.xml`. Детальний звіт — [docs/LAB2.md](docs/LAB2.md).
+- №1: CRUD, міграції, UI, OIDC/JWT і ролі — `controller`, `service`, `repository`, `entity`, `dto`, `mapper`, `config`, `src/main/resources`.
+- №2: unit-тести та JaCoCo — `src/test/java`, `pom.xml`; [звіт](docs/LAB2.md).
+- №3: `@ValidServiceDetails`, `@ApiController`, `@CurrentUsername` — `validation`, `annotation`, `web`, `config/WebConfig.java`; [звіт у гілці №3](https://github.com/Chico123412/backend-technologies/blob/lab-3-annotations/README.md).
 
-Кожна лабораторна має окрему гілку, злиття між ними не виконуються.
+Лабораторні зберігаються в окремих гілках без злиття. Попередні гілки не змінені.
