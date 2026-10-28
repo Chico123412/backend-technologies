@@ -1,5 +1,6 @@
 package com.autoservice.service;
 
+import com.autoservice.annotation.CatalogWritable;
 import com.autoservice.dto.ServiceRequest;
 import com.autoservice.dto.ServiceResponse;
 import com.autoservice.entity.ServiceItem;
@@ -32,12 +33,14 @@ public class CatalogService {
         return mapper.toResponse(findEntity(id));
     }
 
+    @CatalogWritable
     @Transactional
     @PreAuthorize("hasRole('ADMIN')")
     public ServiceResponse create(ServiceRequest request) {
         return mapper.toResponse(repository.save(mapper.toEntity(request)));
     }
 
+    @CatalogWritable
     @Transactional
     @PreAuthorize("hasRole('ADMIN')")
     public ServiceResponse update(long id, ServiceRequest request) {
@@ -46,6 +49,7 @@ public class CatalogService {
         return mapper.toResponse(repository.save(item));
     }
 
+    @CatalogWritable
     @Transactional
     @PreAuthorize("hasRole('ADMIN')")
     public void delete(long id) {
