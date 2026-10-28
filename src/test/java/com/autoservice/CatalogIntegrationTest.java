@@ -208,6 +208,26 @@ class CatalogIntegrationTest {
         assertThat(repository.count()).isZero();
     }
 
+    @Test
+    void quoteEndpointsDemonstrateExternalAndInternalCalls() throws Exception {
+        var item = new com.autoservice.entity.ServiceItem();
+        item.setName("Діагностика");
+        item.setDescription("Огляд авто");
+        item.setPrice(new BigDecimal("100.01"));
+        item.setDurationMinutes(30);
+        long id = repository.saveAndFlush(item).getId();
+        String body = "[" + id + "," + id + "]";
+        mvc.perform(post("/api/quotes").header("Authorization", "Bearer user-token")
+                        .contentType("application/json").content(body))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.total").value(190.02));
+        mvc.perform(post("/api/quotes/self-invocation").header("Authorization", "Bearer user-token")
+                        .contentType("application/json").content(body))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.total").value(190.019));
+        mvc.perform(post("/api/quotes").header("Authorization", "Bearer user-token")
+                        .contentType("application/json").content("[]"))
+                .andExpect(status().isBadRequest());
+    }
+
     private Jwt token(String value, String role) {
         return Jwt.withTokenValue(value).header("alg", "RS256").subject("test-user")
                 .issuedAt(Instant.now()).expiresAt(Instant.now().plusSeconds(300))
