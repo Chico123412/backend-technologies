@@ -63,6 +63,24 @@ class CatalogIntegrationTest {
     }
 
     @Test
+    void adminSummaryCombinesActualCatalogQueries() throws Exception {
+        mvc.perform(post("/api/services").header("Authorization", "Bearer admin-token")
+                .contentType("application/json").content(BODY)).andExpect(status().isCreated());
+        mvc.perform(post("/api/services").header("Authorization", "Bearer admin-token")
+                .contentType("application/json").content(BODY.replace("500.00", "300.00").replace("45", "90")))
+                .andExpect(status().isCreated());
+
+        var result = mvc.perform(get("/api/admin/catalog/summary")
+                        .header("Authorization", "Bearer admin-token"))
+                .andExpect(request().asyncStarted()).andReturn();
+        mvc.perform(asyncDispatch(result)).andExpect(status().isOk())
+                .andExpect(jsonPath("$.maxPrice").value(500))
+                .andExpect(jsonPath("$.maxDurationMinutes").value(90));
+        mvc.perform(get("/api/admin/catalog/summary").header("Authorization", "Bearer user-token"))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
     void crudPersistsChangesAndReturnsExpectedStatuses() throws Exception {
         String body = mvc.perform(post("/api/services").header("Authorization", "Bearer admin-token")
                         .contentType("application/json").content(BODY))
