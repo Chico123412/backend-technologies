@@ -1,22 +1,26 @@
-# Лабораторна №5 — Асинхронна обробка
+# Лабораторна №6 — Quartz Scheduler
 
-У проєкті автосервісу додав фоновий експорт каталогу й зведення для адміністратора.
+У проєкті автосервісу Quartz регулярно зберігає кількість послуг у каталозі й очищає старі знімки. Розклад зберігається в PostgreSQL і переживає перезапуск застосунку.
 
-- `POST /api/admin/catalog/export` повертає `202` та `exportId`, не чекаючи запису файлу. Результат з’являється в `target/catalog-exports/<exportId>.json`.
-- `GET /api/admin/catalog/summary` одночасно запускає два незалежні запити: максимальна ціна й найбільша тривалість послуги. Сервіс об’єднує результати через `thenCombine` і повертає Future контролеру.
+### Розклад
 
-### Де що знаходиться
+Усі Job і Trigger оголошені в `CatalogQuartzConfig.java`, група — `catalog`. Часовий пояс — `Europe/Kyiv`.
 
-Шляхи нижче відносно `src/main/java/com/autoservice/`.
+| Job | Trigger | Коли запускається |
+| --- | --- | --- |
+| `catalog-snapshot` | `daily-snapshot` | Щодня о 02:00 |
+| `catalog-snapshot` | `weekly-snapshot` | Щопонеділка о 03:00 |
+| `snapshot-cleanup` | `daily-cleanup` | Щодня о 04:00 |
 
-| Файл | Що робить |
-| --- | --- |
-| `config/AsyncConfig.java` | Вмикає `@Async`, налаштовує `catalogExecutor`: 2 основні й максимум 2 потоки, черга на 2 завдання, префікс `catalog-async-`. Обробник помилок `void` записує виняток у лог. |
-| `service/CatalogReportTasks.java` | Три методи `@Async("catalogExecutor")`: експорт повертає `void`, запити повертають `CompletableFuture`. |
-| `service/CatalogReportData.java`, `repository/ServiceRepository.java` | Запис JSON і два окремі запити до БД. Затримка 750 мс імітує повільну операцію; `catalog.async-delay-ms=0` її вимикає. |
-| `service/CatalogReportService.java`, `controller/CatalogReportController.java` | Запуск операцій, об’єднання результатів і відповіді API. |
+Для знімка типовий `reportType=daily`. Тижневий тригер перевизначає його на `weekly`, а `zoneId` бере з Job. Для очищення `retentionDays=30`. Якщо обов’язковий параметр відсутній, Job завершується з помилкою.
 
-Асинхронні методи викликаються з іншого біна, тому Spring запускає їх через проксі. На зведення відведено до 3 секунд (`catalog.summary-timeout-ms`). При збої чи тайм-ауті `exceptionally` повертає `200` з поясненням замість даних. Тайм-аут припиняє очікування відповіді; вже запущена операція може завершитися пізніше. Якщо зайняті всі потоки й місця в черзі, API повертає `503` з проханням спробувати пізніше.
+### Як працює
+
+- `CatalogSnapshotJob` і `SnapshotCleanupJob` читають об’єднані параметри та викликають метод `CatalogSnapshotService`. Транзакції знаходяться в сервісі.
+- Знімок зберігається один раз для пари «тип звіту + дата». Повторне очищення з тією самою датою запуску та строком зберігання нічого не видаляє, якщо перший запуск уже очистив усі старі записи.
+- `@DisallowConcurrentExecution` не дає двом запускам одного JobKey виконуватися одночасно. Пропущені за розкладом запуски Quartz не надолужує (`DO_NOTHING`). У разі збою Quartz записує помилку в лог, а завдання чекає наступного запуску за розкладом.
+- Liquibase створює таблиці `QRTZ_*` через `002-quartz.yaml`, а `catalog_snapshots` — через `003-catalog-snapshots.yaml`. SQL-схеми взяті з Quartz 2.5.2 ([Apache 2.0](docs/quartz-license.txt)); видалено команди скидання таблиць і `COMMIT`, щоб схемою керував Liquibase.
+- У `application.yml` увімкнено JDBC JobStore, `initialize-schema: never` та `overwrite-existing-jobs: false`, тому застосунок під час запуску не пересоздає таблиці й не перезаписує наявні тригери.
 
 ### Як перевірити
 
@@ -24,6 +28,14 @@
 ./mvnw clean verify -Pintegration-tests
 ```
 
-`CatalogAsyncIntegrationTest` перевіряє, що експорт повертає `202` до завершення запису, обидва запити починаються до завершення будь-якого з них, а помилки й переповнення черги обробляються. `CatalogReportServiceTest` перевіряє тайм-аут. Для тестів Docker не потрібен.
+Тести перевіряють параметри, часовий пояс, misfire, обробку помилки, повторний запуск і збереження тригера після перезапуску планувальника. Інтеграційні тести використовують H2.
 
-Для ручної перевірки запусти `docker compose up -d --wait`, дочекайся Keycloak на порту 8081, виконай `./mvnw spring-boot:run` і відкрий запити з `requests/lab5.http`. Якщо каталог порожній, максимальні значення будуть `null`.
+Для запуску з PostgreSQL виконай `docker compose up -d --wait`, дочекайся Keycloak і запусти `./mvnw spring-boot:run`. Після старту застосунку можна перевірити розклад і знімки:
+
+```bash
+docker compose exec postgres psql -U autoservice -d autoservice \
+  -c 'SELECT trigger_name, job_name, misfire_instr FROM qrtz_triggers ORDER BY trigger_name;' \
+  -c 'SELECT * FROM catalog_snapshots ORDER BY report_date DESC;'
+```
+
+До першого виконання завдань таблиця знімків буде порожньою.
