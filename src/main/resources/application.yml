@@ -12,6 +12,16 @@ spring:
   liquibase:
     change-log: classpath:db/changelog/db.changelog-master.yaml
 
+  quartz:
+    scheduler-name: autoservice-scheduler
+    job-store-type: jdbc
+    overwrite-existing-jobs: false
+    jdbc:
+      initialize-schema: never
+    properties:
+      org.quartz.jobStore.driverDelegateClass: org.quartz.impl.jdbcjobstore.PostgreSQLDelegate
+      org.quartz.jobStore.useProperties: true
+
   security:
     oauth2:
       client:

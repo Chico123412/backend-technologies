@@ -1,0 +1,17 @@
+databaseChangeLog:
+  - changeSet:
+      id: 002-quartz-postgresql
+      author: autoservice
+      dbms: postgresql
+      changes:
+        - sqlFile:
+            path: 002-quartz-postgres.sql
+            relativeToChangelogFile: true
+  - changeSet:
+      id: 002-quartz-h2
+      author: autoservice
+      dbms: h2
+      changes:
+        - sqlFile:
+            path: 002-quartz-h2.sql
+            relativeToChangelogFile: true

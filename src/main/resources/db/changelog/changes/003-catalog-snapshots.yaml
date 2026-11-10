@@ -1,0 +1,27 @@
+databaseChangeLog:
+  - changeSet:
+      id: 003-catalog-snapshots
+      author: autoservice
+      changes:
+        - createTable:
+            tableName: catalog_snapshots
+            columns:
+              - column:
+                  name: report_type
+                  type: varchar(20)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: report_date
+                  type: date
+                  constraints:
+                    nullable: false
+              - column:
+                  name: service_count
+                  type: bigint
+                  constraints:
+                    nullable: false
+        - addPrimaryKey:
+            tableName: catalog_snapshots
+            columnNames: report_type, report_date
+            constraintName: pk_catalog_snapshots
