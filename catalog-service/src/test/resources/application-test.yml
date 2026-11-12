@@ -7,7 +7,3 @@ spring:
   jpa:
     hibernate:
       ddl-auto: validate
-  quartz:
-    auto-startup: false
-    properties:
-      org.quartz.jobStore.driverDelegateClass: org.quartz.impl.jdbcjobstore.StdJDBCDelegate

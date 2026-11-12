@@ -18,6 +18,7 @@
 
     <modules>
         <module>catalog-service</module>
+        <module>reporting-service</module>
     </modules>
 
     <properties>

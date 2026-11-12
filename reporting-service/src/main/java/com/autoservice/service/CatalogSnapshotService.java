@@ -1,6 +1,5 @@
 package com.autoservice.service;
 
-import com.autoservice.repository.ServiceRepository;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -10,11 +9,9 @@ import java.time.LocalDate;
 @Service
 public class CatalogSnapshotService {
     private final JdbcTemplate jdbc;
-    private final ServiceRepository catalog;
 
-    public CatalogSnapshotService(JdbcTemplate jdbc, ServiceRepository catalog) {
+    public CatalogSnapshotService(JdbcTemplate jdbc) {
         this.jdbc = jdbc;
-        this.catalog = catalog;
     }
 
     @Transactional
@@ -24,9 +21,9 @@ public class CatalogSnapshotService {
         }
         return jdbc.update("""
                 INSERT INTO catalog_snapshots (report_type, report_date, service_count)
-                VALUES (?, ?, ?)
+                SELECT ?, ?, COUNT(*) FROM service_items
                 ON CONFLICT DO NOTHING
-                """, reportType, date, catalog.count());
+                """, reportType, date);
     }
 
     @Transactional

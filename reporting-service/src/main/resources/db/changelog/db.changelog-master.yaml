@@ -1,0 +1,7 @@
+databaseChangeLog:
+  - include:
+      file: changes/002-quartz.yaml
+      relativeToChangelogFile: true
+  - include:
+      file: changes/003-catalog-snapshots.yaml
+      relativeToChangelogFile: true
