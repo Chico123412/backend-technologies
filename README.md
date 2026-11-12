@@ -1,53 +1,51 @@
-# Лабораторна №6 — Quartz Scheduler
+# Лабораторна №7 — Multi-module Maven
 
-У проєкті автосервісу Quartz регулярно зберігає кількість послуг у каталозі й очищає старі знімки. Розклад зберігається в PostgreSQL між перезапусками застосунку.
+Автосервіс складається з двох Spring Boot сервісів. Кореневий `pom.xml` має тип `pom`, перелічує модулі та містить спільні залежності, зокрема `spring-boot-starter-test`. Кожен модуль успадковує цей POM і оголошує свій Spring Boot plugin.
 
-### Розклад
+| Модуль | Головний клас | Порт | Призначення |
+| --- | --- | --- | --- |
+| `catalog-service` | `AutoserviceApplication` | 8080 | Каталог, вебінтерфейс і REST API з Keycloak |
+| `reporting-service` | `ReportingApplication` | 8082 | Знімки каталогу та очищення старих звітів за розкладом Quartz |
 
-Усі Job і Trigger оголошені в `CatalogQuartzConfig.java`, група — `catalog`. Часовий пояс — `Europe/Kyiv`.
+У кожному модулі є власний `application.yml`, тести й Dockerfile. Сервіси збираються в окремі JAR і не залежать один від одного через Maven. PostgreSQL спільна: каталог керує таблицею `service_items`, а сервіс звітів читає з неї кількість послуг і керує `catalog_snapshots` та таблицями Quartz. Планувальник зберігає розклад у базі. Для створення знімків потрібна ініціалізована таблиця каталогу; запущений процес каталогу для цього не потрібен.
 
-| Job | Trigger | Коли запускається |
-| --- | --- | --- |
-| `catalog-snapshot` | `daily-snapshot` | Щодня о 02:00 |
-| `catalog-snapshot` | `weekly-snapshot` | Щопонеділка о 03:00 |
-| `snapshot-cleanup` | `daily-cleanup` | Щодня о 04:00 |
-
-Для знімка типовий `reportType=daily`. Тижневий тригер перевизначає його на `weekly`, а `zoneId` бере з Job. Для очищення `retentionDays=30`. Якщо обов’язковий параметр відсутній, Job завершується з помилкою.
-
-### Як працює
-
-- `CatalogSnapshotJob` і `SnapshotCleanupJob` читають об’єднані параметри та викликають метод `CatalogSnapshotService`. Транзакції відкриваються на рівні сервісу.
-- Знімок зберігається один раз для пари «тип звіту + дата». Повторне очищення з тією самою датою запуску та строком зберігання нічого не видаляє, якщо перший запуск уже очистив усі старі записи.
-- `@DisallowConcurrentExecution` не дає двом запускам одного JobKey виконуватися одночасно. Пропущені за розкладом запуски Quartz не надолужує (`DO_NOTHING`). У разі збою Quartz записує помилку в лог, а завдання чекає наступного запуску за розкладом.
-- Liquibase створює таблиці `QRTZ_*` через `002-quartz.yaml`, а `catalog_snapshots` — через `003-catalog-snapshots.yaml`. SQL-схеми взяті з Quartz 2.5.2 ([Apache 2.0](docs/quartz-license.txt)); видалено команди скидання таблиць і `COMMIT`, щоб схемою керував Liquibase.
-- У `application.yml` увімкнено JDBC JobStore, `initialize-schema: never` та `overwrite-existing-jobs: false`, тому під час запуску таблиці не створюються повторно, а наявні тригери зберігаються.
-
-### Тести
+### Збірка й тести
 
 ```bash
-./mvnw clean verify -Pintegration-tests
+./mvnw clean verify
+./mvnw verify -Pintegration-tests
 ```
 
-Інтеграційні тести працюють на H2. Серед перевірок — збереження тригера після перезапуску, обробка пропущених запусків (misfire) і відсутність дублів при повторному виконанні.
+Другий запуск додає інтеграційні тести каталогу. Тести звітів із H2 запускаються в обох випадках.
+
+```bash
+./mvnw -pl catalog-service dependency:tree
+./mvnw -pl reporting-service dependency:tree
+```
 
 ### Локальний запуск
-
-PostgreSQL і Keycloak запускаються через Docker Compose:
 
 ```bash
 docker compose up -d --wait
 ```
 
-Після готовності Keycloak застосунок запускається командою:
+Після готовності Keycloak каталог і звіти запускаються в окремих терміналах. Перший запуск каталогу створює таблицю `service_items`.
 
 ```bash
-./mvnw spring-boot:run
+./mvnw -pl catalog-service spring-boot:run
 ```
 
-Розклад зберігається в `qrtz_triggers`, результати — в `catalog_snapshots`. До першого виконання завдання зі збереження знімка таблиця результатів порожня.
+```bash
+./mvnw -pl reporting-service spring-boot:run
+```
+
+Каталог: [localhost:8080](http://localhost:8080). Стан планувальника: [localhost:8082/status](http://localhost:8082/status).
+
+### Docker-образи
+
+Dockerfile кожного модуля використовує JAR, створений під час збірки Maven.
 
 ```bash
-docker compose exec postgres psql -U autoservice -d autoservice \
-  -c 'SELECT trigger_name, job_name, misfire_instr FROM qrtz_triggers ORDER BY trigger_name;' \
-  -c 'SELECT * FROM catalog_snapshots ORDER BY report_date DESC;'
+docker build -t autoservice-catalog ./catalog-service
+docker build -t autoservice-reporting ./reporting-service
 ```
