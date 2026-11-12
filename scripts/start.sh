@@ -17,4 +17,4 @@ if [ "$ready" != true ]; then
     docker compose logs --tail=40 keycloak
     exit 1
 fi
-exec ./mvnw spring-boot:run
+exec ./mvnw -pl catalog-service spring-boot:run
