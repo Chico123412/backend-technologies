@@ -43,6 +43,63 @@ class ReportingTest {
     @Autowired MockMvc mvc;
     @Autowired javax.sql.DataSource dataSource;
 
+    @Autowired com.autoservice.events.CatalogEventJournal journal;
+
+    @Autowired org.springframework.amqp.rabbit.core.RabbitTemplate rabbit;
+    @Autowired org.springframework.amqp.rabbit.listener.RabbitListenerEndpointRegistry listeners;
+
+    @Test
+    @org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable(named = "RUN_RABBITMQ_TESTS", matches = "true")
+    void realListenerProcessesQueuedJsonAndIgnoresRedelivery() throws Exception {
+        var admin = new org.springframework.amqp.rabbit.core.RabbitAdmin(rabbit.getConnectionFactory());
+        var queue = new org.springframework.amqp.core.Queue("reporting.catalog-events", true);
+        var exchange = new org.springframework.amqp.core.DirectExchange("catalog.events", true, false);
+        admin.declareExchange(exchange);
+        admin.declareQueue(queue);
+        admin.declareBinding(org.springframework.amqp.core.BindingBuilder.bind(queue)
+                .to(exchange).with("service.changed"));
+        assertThat(admin.getQueueProperties(queue.getName()).get("QUEUE_MESSAGE_COUNT")).isEqualTo(2);
+        jdbc.update("DELETE FROM catalog_event_journal");
+        assertThat(journal.recent()).isEmpty();
+        listeners.start();
+        try {
+            long deadline = System.nanoTime() + java.util.concurrent.TimeUnit.SECONDS.toNanos(5);
+            while (System.nanoTime() < deadline
+                    && (journal.recent().size() < 2
+                    || !Integer.valueOf(0).equals(admin.getQueueProperties(queue.getName()).get("QUEUE_MESSAGE_COUNT")))) {
+                Thread.sleep(20);
+            }
+            assertThat(journal.recent()).hasSize(2)
+                    .extracting(com.autoservice.events.ServiceEvent::action)
+                    .containsOnly("CREATED");
+            var event = journal.recent().get(0);
+            var confirmation = new org.springframework.amqp.rabbit.connection.CorrelationData(event.eventId());
+            rabbit.convertAndSend("catalog.events", "service.changed",
+                    Map.of("eventId", event.eventId(), "action", event.action(),
+                            "serviceId", event.serviceId(), "name", event.name()), confirmation);
+            assertThat(confirmation.getFuture().get(5, java.util.concurrent.TimeUnit.SECONDS).isAck()).isTrue();
+            deadline = System.nanoTime() + java.util.concurrent.TimeUnit.SECONDS.toNanos(5);
+            while (!Integer.valueOf(0).equals(admin.getQueueProperties(queue.getName()).get("QUEUE_MESSAGE_COUNT"))
+                    && System.nanoTime() < deadline) {
+                Thread.sleep(20);
+            }
+        } finally {
+            listeners.stop();
+        }
+        assertThat(admin.getQueueProperties(queue.getName()).get("QUEUE_MESSAGE_COUNT")).isEqualTo(0);
+        assertThat(journal.recent()).hasSize(2);
+    }
+
+    @Test
+    void repeatedEventIsStoredOnlyOnceAndVisibleThroughApi() throws Exception {
+        var event = new com.autoservice.events.ServiceEvent("repeat-event", "CREATED", 7L, "Огляд");
+        assertThat(journal.accept(event)).isEqualTo(1);
+        assertThat(journal.accept(event)).isZero();
+        assertThat(journal.recent()).contains(event);
+        mvc.perform(get("/api/catalog-events")).andExpect(status().isOk())
+                .andExpect(jsonPath("$[?(@.eventId == 'repeat-event')].name").value("Огляд"));
+    }
+
     @Test
     void statusEndpointRespondsWithServiceAndSchedulerState() throws Exception {
         mvc.perform(get("/status"))

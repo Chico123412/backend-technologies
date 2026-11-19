@@ -62,6 +62,89 @@ class CatalogIntegrationTest {
                 .userNameAttributeName("sub").clientName("Keycloak").build());
     }
 
+    @Autowired org.springframework.jdbc.core.JdbcTemplate eventJdbc;
+    @Autowired org.springframework.transaction.PlatformTransactionManager transactions;
+    @Autowired com.autoservice.service.CatalogService catalogService;
+
+    @Autowired org.springframework.amqp.rabbit.core.RabbitTemplate eventRabbit;
+
+    @Test
+    @org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable(named = "RUN_RABBITMQ_TESTS", matches = "true")
+    @org.springframework.security.test.context.support.WithMockUser(roles = "ADMIN")
+    void brokerGetsOnlyCommittedEventsAndKeepsThemWithoutConsumer() throws Exception {
+        var admin = new org.springframework.amqp.rabbit.core.RabbitAdmin(eventRabbit.getConnectionFactory());
+        admin.declareExchange(new org.springframework.amqp.core.DirectExchange("catalog.events", true, false));
+        var queue = new org.springframework.amqp.core.Queue("reporting.catalog-events", true);
+        admin.declareQueue(queue);
+        admin.declareBinding(org.springframework.amqp.core.BindingBuilder.bind(queue)
+                .to(new org.springframework.amqp.core.DirectExchange("catalog.events")).with("service.changed"));
+        admin.purgeQueue(queue.getName(), false);
+        eventJdbc.update("DELETE FROM catalog_event_outbox");
+        var relay = new com.autoservice.messaging.CatalogEventRelay(eventJdbc, eventRabbit);
+        var request = new com.autoservice.dto.ServiceRequest("Огляд", "Перевірка", new BigDecimal("100"), 30);
+        var tx = new org.springframework.transaction.support.TransactionTemplate(transactions);
+        var worker = java.util.concurrent.Executors.newSingleThreadExecutor();
+        try {
+            tx.execute(status -> {
+                catalogService.create(request);
+                try {
+                    worker.submit(relay::publishPending).get(5, java.util.concurrent.TimeUnit.SECONDS);
+                } catch (Exception error) {
+                    throw new IllegalStateException(error);
+                }
+                assertThat(admin.getQueueProperties(queue.getName()).get("QUEUE_MESSAGE_COUNT")).isEqualTo(0);
+                status.setRollbackOnly();
+                return null;
+            });
+        } finally {
+            worker.shutdownNow();
+        }
+        relay.publishPending();
+        assertThat(admin.getQueueProperties(queue.getName()).get("QUEUE_MESSAGE_COUNT")).isEqualTo(0);
+
+        catalogService.create(request);
+        catalogService.create(request);
+        relay.publishPending();
+        assertThat(admin.getQueueProperties(queue.getName()).get("QUEUE_MESSAGE_COUNT")).isEqualTo(2);
+        var first = eventRabbit.receive(queue.getName(), 2000);
+        var second = eventRabbit.receive(queue.getName(), 2000);
+        assertThat(first).isNotNull();
+        assertThat(second).isNotNull();
+        assertThat(json.readValue(first.getBody(), com.autoservice.messaging.ServiceEvent.class).action())
+                .isEqualTo("CREATED");
+        assertThat(json.readValue(second.getBody(), com.autoservice.messaging.ServiceEvent.class).action())
+                .isEqualTo("CREATED");
+        assertThat(admin.getQueueProperties(queue.getName()).get("QUEUE_MESSAGE_COUNT")).isEqualTo(0);
+
+        // Ці дві події обробить reporting-service у наступному модулі Maven.
+        catalogService.create(request);
+        catalogService.create(request);
+        relay.publishPending();
+        assertThat(admin.getQueueProperties(queue.getName()).get("QUEUE_MESSAGE_COUNT")).isEqualTo(2);
+    }
+
+    @Test
+    @org.springframework.security.test.context.support.WithMockUser(roles = "ADMIN")
+    void committedCrudCreatesThreeEventsAndRollbackCreatesNone() {
+        eventJdbc.update("DELETE FROM catalog_event_outbox");
+        var tx = new org.springframework.transaction.support.TransactionTemplate(transactions);
+        var request = new com.autoservice.dto.ServiceRequest("Огляд", "Перевірка", new BigDecimal("100"), 30);
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> tx.execute(status -> {
+            catalogService.create(request);
+            throw new IllegalStateException("rollback");
+        })).isInstanceOf(IllegalStateException.class);
+        assertThat(eventJdbc.queryForObject("SELECT COUNT(*) FROM catalog_event_outbox", Integer.class)).isZero();
+
+        var item = catalogService.create(request);
+        catalogService.update(item.id(), request);
+        catalogService.delete(item.id());
+        assertThat(eventJdbc.queryForList("SELECT action FROM catalog_event_outbox", String.class))
+                .containsExactlyInAnyOrder("CREATED", "UPDATED", "DELETED");
+        assertThat(eventJdbc.queryForObject("SELECT COUNT(*) FROM catalog_event_outbox WHERE published = false",
+                Integer.class)).isEqualTo(3);
+    }
+
     @Test
     void adminSummaryCombinesActualCatalogQueries() throws Exception {
         mvc.perform(post("/api/services").header("Authorization", "Bearer admin-token")
