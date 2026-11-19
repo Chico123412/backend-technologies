@@ -1,33 +1,48 @@
-# Лабораторна №8 — Message brokers
+# Лабораторна №9 — Interservice communication
 
-Каталог надсилає події про створення, редагування та видалення послуг через RabbitMQ. Сервіс звітів отримує їх і зберігає журнал. Прямих HTTP-викликів між сервісами в цьому процесі немає.
+Сервіс звітів (A) запитує дані каталогу (B) для трьох дій: оцінки вартості, планування часу та отримання картки послуги. Спосіб зв’язку перемикається між HTTP і gRPC без зміни контролера.
 
-### Реалізація
+### Що реалізовано
 
-| Файли | Що зроблено |
+| Файли | Призначення |
 | --- | --- |
-| `compose.yml` | RabbitMQ, постійний volume і порти 5672 та 15672. У контейнерах сервісів `RABBITMQ_HOST=rabbitmq`. |
-| `catalog-service/.../service/CatalogService.java` | Після успішної зміни послуги записується одна подія. Запис послуги й події входить в одну транзакцію. |
-| `catalog-service/.../messaging/` | `CatalogEventOutbox` записує подію в БД, `CatalogEventRelay` надсилає зафіксовані події в RabbitMQ раз на 2 секунди. |
-| `reporting-service/.../events/` | Listener отримує подію, а `CatalogEventJournal` додає її в журнал. |
-| `reporting-service/.../controller/CatalogJournalController.java` | `GET /api/catalog-events` повертає останні 100 подій. |
-| `config/RabbitConfig.java` в обох модулях | Durable exchange `catalog.events`, черга `reporting.catalog-events`, JSON-конвертер і routing key `service.changed`. |
+| `catalog-contracts/src/main/proto/catalog.proto` | Спільний контракт: повідомлення ServiceId, ServiceData і rpc GetService. Java-класи генеруються в target під час збірки. |
+| `catalog-service/.../controller/InternalCatalogController.java` | REST-читання послуги: `GET /internal/catalog/{id}`. |
+| `catalog-service/.../grpc/` | gRPC API та запуск/зупинка сервера разом із застосунком. Відсутня послуга дає NOT_FOUND. |
+| `reporting-service/.../catalog/` | Три порти: PriceLookup, DurationLookup, ServiceDetailsLookup; HTTP і gRPC адаптери, власні винятки. |
+| `reporting-service/.../config/CatalogLookupConfig.java` | Декларативний HTTP-клієнт Spring через GetExchange, gRPC channel і вибір адаптера. |
+| `reporting-service/.../controller/ServicePlanningController.java` | Три бізнес-дії; працює лише через порти. |
+| `reporting-service/.../controller/CatalogLookupErrors.java` | Перетворення власних винятків у HTTP 404 та 503. |
 
-Шляхи до Java-файлів починаються з `src/main/java/com/autoservice/`. Для кожного сервісу є свій запис `ServiceEvent`; формат JSON однаковий, але залежності між модулями немає.
+Java-шляхи в таблиці починаються з `src/main/java/com/autoservice/`.
 
-Якщо транзакція відкочується, запис події теж відкочується. Після commit фонове завдання може прочитати подію й надіслати її. Якщо RabbitMQ недоступний, подія залишається в БД для повторного надсилання. Після підтвердження брокера вона позначається надісланою.
+### Налаштування
 
-Повідомлення persistent, черга durable, дані RabbitMQ зберігаються у volume. Якщо сервіс звітів зупинений, каталог продовжує працювати, а події очікують у черзі. Після запуску споживача вони потрапляють у журнал. Унікальний `event_id` не дозволяє повторній доставці додати той самий запис удруге. Підтвердження споживача відбувається після повернення listener і commit журналу.
+`catalog.lookup.transport` має значення `http` або `grpc`. Невідоме значення зупиняє запуск. gRPC-сервер каталогу за замовчуванням вимкнений.
 
-### Запуск
+| Змінна середовища | Типове значення |
+| --- | --- |
+| `CATALOG_TRANSPORT` | http |
+| `CATALOG_HTTP_URL` | http://localhost:8080 |
+| `CATALOG_GRPC_TARGET` | localhost:9090 |
+| `CATALOG_GRPC_ENABLED` | false |
+| `CATALOG_GRPC_PORT` | 9090 |
+| `CATALOG_CONNECT_TIMEOUT_MS` | 1000 |
+| `CATALOG_READ_TIMEOUT_MS` | 1500 |
+| `CATALOG_DEADLINE_MS` | 1500 |
 
-PostgreSQL, Keycloak і RabbitMQ:
+У Compose REST-адреса — `http://catalog:8080`, gRPC-адреса — `catalog:9090`. Брокерні події восьмої лабораторної залишилися окремим процесом і не замінені HTTP-викликами.
+
+Помилки обох адаптерів зведено до `CatalogItemNotFound` і `CatalogUnavailable`. HTTP 404 та gRPC NOT_FOUND дають 404 у сервісі A. Тайм-аут, deadline, відмова в з’єднанні та інші помилки дають 503. Для локального gRPC використовується plaintext. Внутрішній REST-ендпоінт також дозволяє читання без JWT; правила доступу до звичайного API каталогу збережені.
+
+### Збірка й запуск
 
 ```bash
+./mvnw clean install -Pintegration-tests
 docker compose up -d --wait
 ```
 
-Після готовності Keycloak обидва сервіси запускаються в окремих терміналах:
+Install встановлює parent і модуль контрактів у локальний Maven-репозиторій, щоб сервіси можна було запускати окремо. Після готовності Keycloak:
 
 ```bash
 ./mvnw -pl catalog-service spring-boot:run
@@ -37,24 +52,28 @@ docker compose up -d --wait
 ./mvnw -pl reporting-service spring-boot:run
 ```
 
-Стандартна адреса брокера — `localhost:5672`. Налаштування беруться з `RABBITMQ_HOST`, `RABBITMQ_PORT`, `RABBITMQ_USER` і `RABBITMQ_PASSWORD`. У Compose логін `autoservice`, пароль `autoservice_dev`. Інтерфейс RabbitMQ — [localhost:15672](http://localhost:15672), журнал — [localhost:8082/api/catalog-events](http://localhost:8082/api/catalog-events).
+Для режиму gRPC сервіси запускаються з іншими налаштуваннями:
+
+```bash
+CATALOG_GRPC_ENABLED=true ./mvnw -pl catalog-service spring-boot:run
+```
+
+```bash
+CATALOG_TRANSPORT=grpc ./mvnw -pl reporting-service spring-boot:run
+```
 
 ### Перевірка
 
 ```bash
-./mvnw clean verify -Pintegration-tests
+./mvnw verify -Pintegration-tests
 ```
 
-Цей набір не потребує Docker. Модульний тест `CatalogEventJournalTest` перевіряє повторну доставку, а інтеграційний тест — відсутність дубля в справжній H2-таблиці. Тести каталогу перевіряють три події CRUD і rollback. `CatalogEventRelayTest` перевіряє persistent-повідомлення, підтвердження та відмову брокера.
+Тести HTTP-клієнта використовують локальний HTTP-сервер, а gRPC — справжній сервер на випадковому порту. Перевіряються три дії, 404/503, перевищення read timeout/deadline, зупинений сервер, невідомий адаптер і життєвий цикл gRPC. Docker для цих тестів не потрібен. Дві перевірки RabbitMQ з попередньої лабораторної залишаються окремо вимкненими без `RUN_RABBITMQ_TESTS=true`.
 
-Окремі тести з живим RabbitMQ запускаються з кореня: каталог залишає дві події, а наступний модуль звітів обробляє їх своїм listener. Перед запуском звичайні екземпляри сервісів мають бути зупинені, оскільки тести очищають навчальну чергу.
+Запити — `requests/lab9.http`. Нові ендпоінти сервісу звітів працюють з однаковими URL в обох режимах:
 
-```bash
-RUN_RABBITMQ_TESTS=true ./mvnw verify -Pintegration-tests
-```
+- `GET /api/estimates/{id}?quantity=2` — загальна вартість.
+- `GET /api/planning/{id}` — тривалість.
+- `GET /api/cards/{id}` — картка послуги.
 
-Вони перевіряють доставку після commit, відсутність повідомлення після rollback, накопичення двох подій без споживача та обробку черги зі справжнім listener.
-
-Ручні запити — `requests/lab8.http`. Створення й редагування доступні manager/manager123. Для перевірки зупиненого споживача достатньо зупинити reporting-service, двічі створити послугу й знову запустити reporting-service. Записи з’являться в журналі після доставки. Кожне нове натискання POST створює окрему бізнес-дію; повторна доставка означає той самий `eventId`.
-
-Для збірки Docker-образів залишені окремі Dockerfile. Профіль `apps` в Compose задає брокер за ім’ям `rabbitmq`; основний варіант локальної перевірки вище використовує сервіси з IDE/Maven.
+Для перевірки 503 достатньо зупинити каталог. Для 404 використовується ID, якого немає в БД.

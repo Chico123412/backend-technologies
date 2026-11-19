@@ -1,0 +1,39 @@
+@catalog = http://localhost:8080
+@reporting = http://localhost:8082
+@tokenUrl = http://localhost:8081/realms/autoservice/protocol/openid-connect/token
+
+### Токен адміністратора
+POST {{tokenUrl}}
+Content-Type: application/x-www-form-urlencoded
+
+grant_type=password&client_id=autoservice-api&username=manager&password=manager123
+
+> {% client.global.set("lab9Token", response.body.access_token); %}
+
+### Створення даних для перевірки
+POST {{catalog}}/api/services
+Authorization: Bearer {{lab9Token}}
+Content-Type: application/json
+
+{"name":"Діагностика","description":"Огляд авто","price":400.00,"durationMinutes":30}
+
+> {% client.global.set("lab9Id", response.body.id); %}
+
+### Вартість двох послуг — 800.00
+GET {{reporting}}/api/estimates/{{lab9Id}}?quantity=2
+
+### Планування часу — 30 хв
+GET {{reporting}}/api/planning/{{lab9Id}}
+
+### Картка послуги
+GET {{reporting}}/api/cards/{{lab9Id}}
+
+### Неіснуючий ID — 404 (у режимі HTTP та gRPC)
+GET {{reporting}}/api/cards/999999999
+
+### Після зупинки каталогу той самий запит дає 503
+GET {{reporting}}/api/cards/{{lab9Id}}
+
+### Видалення тестової послуги після повторного запуску каталогу
+DELETE {{catalog}}/api/services/{{lab9Id}}
+Authorization: Bearer {{lab9Token}}
