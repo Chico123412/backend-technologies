@@ -1,0 +1,41 @@
+@catalog = http://localhost:8080
+@reporting = http://localhost:8082
+@tokenUrl = http://localhost:8081/realms/autoservice/protocol/openid-connect/token
+
+### JWT адміністратора
+POST {{tokenUrl}}
+Content-Type: application/x-www-form-urlencoded
+
+grant_type=password&client_id=autoservice-api&username=manager&password=manager123
+
+> {% client.global.set("lab8Token", response.body.access_token); %}
+
+### Створення — 201 та подія CREATED
+POST {{catalog}}/api/services
+Authorization: Bearer {{lab8Token}}
+Content-Type: application/json
+
+{"name":"Діагностика","description":"Огляд авто","price":400.00,"durationMinutes":30}
+
+> {% client.global.set("lab8Id", response.body.id); %}
+
+### Редагування — 200 та подія UPDATED
+PUT {{catalog}}/api/services/{{lab8Id}}
+Authorization: Bearer {{lab8Token}}
+Content-Type: application/json
+
+{"name":"Діагностика двигуна","description":"Повний огляд","price":500.00,"durationMinutes":45}
+
+### Видалення — 204 та подія DELETED
+DELETE {{catalog}}/api/services/{{lab8Id}}
+Authorization: Bearer {{lab8Token}}
+
+### Невдала дія — 400, події немає
+POST {{catalog}}/api/services
+Authorization: Bearer {{lab8Token}}
+Content-Type: application/json
+
+{"name":"","price":-1,"durationMinutes":0}
+
+### Журнал: записи з’являються після фонової доставки
+GET {{reporting}}/api/catalog-events
