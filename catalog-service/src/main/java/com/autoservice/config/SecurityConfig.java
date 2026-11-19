@@ -25,10 +25,11 @@ public class SecurityConfig {
     SecurityFilterChain apiSecurity(HttpSecurity http) throws Exception {
         var converter = new JwtAuthenticationConverter();
         converter.setJwtGrantedAuthoritiesConverter(jwt -> KeycloakRoles.fromClaims(jwt.getClaims()));
-        return http.securityMatcher("/api/**")
+        return http.securityMatcher("/api/**", "/internal/catalog/**")
                 .csrf(AbstractHttpConfigurer::disable)
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
+                        .requestMatchers("/internal/catalog/**").permitAll()
                         .requestMatchers("/api/admin/**").hasRole("ADMIN")
                         .anyRequest().authenticated())
                 .oauth2ResourceServer(oauth -> oauth.jwt(jwt -> jwt.jwtAuthenticationConverter(converter)))

@@ -1,0 +1,20 @@
+syntax = "proto3";
+package autoservice.catalog;
+option java_package = "com.autoservice.contract";
+option java_multiple_files = true;
+
+service CatalogRpc {
+  rpc GetService (ServiceId) returns (ServiceData);
+}
+
+message ServiceId {
+  int64 id = 1;
+}
+
+message ServiceData {
+  int64 id = 1;
+  string name = 2;
+  string description = 3;
+  string price = 4;
+  int32 duration_minutes = 5;
+}

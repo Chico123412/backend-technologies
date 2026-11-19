@@ -47,3 +47,8 @@ app:
 
 server:
   port: 8080
+
+catalog:
+  grpc:
+    enabled: ${CATALOG_GRPC_ENABLED:false}
+    port: ${CATALOG_GRPC_PORT:9090}
