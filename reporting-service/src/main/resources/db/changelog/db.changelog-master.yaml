@@ -5,3 +5,6 @@ databaseChangeLog:
   - include:
       file: changes/003-catalog-snapshots.yaml
       relativeToChangelogFile: true
+  - include:
+      file: changes/005-catalog-event-journal.yaml
+      relativeToChangelogFile: true

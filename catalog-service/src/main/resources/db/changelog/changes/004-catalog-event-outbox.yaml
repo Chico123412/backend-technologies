@@ -1,0 +1,43 @@
+databaseChangeLog:
+  - changeSet:
+      id: 004-catalog-event-outbox
+      author: autoservice
+      changes:
+        - createTable:
+            tableName: catalog_event_outbox
+            columns:
+              - column:
+                  name: event_id
+                  type: varchar(36)
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: action
+                  type: varchar(20)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: service_id
+                  type: bigint
+                  constraints:
+                    nullable: false
+              - column:
+                  name: service_name
+                  type: varchar(120)
+                  constraints:
+                    nullable: false
+
+              - column:
+                  name: published
+                  type: boolean
+                  defaultValueBoolean: false
+                  constraints:
+                    nullable: false
+
+              - column:
+                  name: created_at
+                  type: timestamp
+                  defaultValueComputed: CURRENT_TIMESTAMP
+                  constraints:
+                    nullable: false

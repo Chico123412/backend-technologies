@@ -1,0 +1,83 @@
+services:
+  rabbitmq:
+    image: rabbitmq:4.1-management
+    environment:
+      RABBITMQ_DEFAULT_USER: autoservice
+      RABBITMQ_DEFAULT_PASS: autoservice_dev
+    ports:
+      - "127.0.0.1:5672:5672"
+      - "127.0.0.1:15672:15672"
+    volumes:
+      - rabbitmq-data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  catalog:
+    profiles: ["apps"]
+    build: ./catalog-service
+    environment:
+      DB_URL: jdbc:postgresql://postgres:5432/autoservice
+      KEYCLOAK_URL: http://host.docker.internal:8081
+      RABBITMQ_HOST: rabbitmq
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    ports:
+      - "127.0.0.1:8080:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      keycloak:
+        condition: service_started
+
+  reporting:
+    profiles: ["apps"]
+    build: ./reporting-service
+    environment:
+      DB_URL: jdbc:postgresql://postgres:5432/autoservice
+      RABBITMQ_HOST: rabbitmq
+    ports:
+      - "127.0.0.1:8082:8082"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+
+
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_DB: autoservice
+      POSTGRES_USER: autoservice
+      POSTGRES_PASSWORD: autoservice_dev
+    ports:
+      - "127.0.0.1:55432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U autoservice -d autoservice"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.8.1
+    command: start-dev --import-realm
+    environment:
+      KC_BOOTSTRAP_ADMIN_USERNAME: admin
+      KC_BOOTSTRAP_ADMIN_PASSWORD: admin
+    ports:
+      - "127.0.0.1:8081:8080"
+    volumes:
+      - ./keycloak/autoservice-realm.json:/opt/keycloak/data/import/autoservice-realm.json:ro
+      - keycloak-data:/opt/keycloak/data
+
+volumes:
+  rabbitmq-data:
+  keycloak-data:
+  postgres-data:

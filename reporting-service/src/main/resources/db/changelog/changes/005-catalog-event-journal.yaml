@@ -1,0 +1,36 @@
+databaseChangeLog:
+  - changeSet:
+      id: 005-catalog-event-journal
+      author: autoservice
+      changes:
+        - createTable:
+            tableName: catalog_event_journal
+            columns:
+              - column:
+                  name: event_id
+                  type: varchar(36)
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: action
+                  type: varchar(20)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: service_id
+                  type: bigint
+                  constraints:
+                    nullable: false
+              - column:
+                  name: service_name
+                  type: varchar(120)
+                  constraints:
+                    nullable: false
+
+              - column:
+                  name: received_at
+                  type: timestamp
+                  defaultValueComputed: CURRENT_TIMESTAMP
+                  constraints:
+                    nullable: false
