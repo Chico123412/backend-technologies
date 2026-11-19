@@ -69,6 +69,20 @@ class CatalogIntegrationTest {
     @Autowired org.springframework.amqp.rabbit.core.RabbitTemplate eventRabbit;
 
     @Test
+    void internalCatalogEndpointReturnsDataAnd404() throws Exception {
+        var item = new com.autoservice.entity.ServiceItem();
+        item.setName("Огляд");
+        item.setPrice(new BigDecimal("123.45"));
+        item.setDurationMinutes(30);
+        long id = repository.saveAndFlush(item).getId();
+
+        mvc.perform(get("/internal/catalog/{id}", id)).andExpect(status().isOk())
+                .andExpect(jsonPath("$.price").value(123.45))
+                .andExpect(jsonPath("$.durationMinutes").value(30));
+        mvc.perform(get("/internal/catalog/999999")).andExpect(status().isNotFound());
+    }
+
+    @Test
     @org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable(named = "RUN_RABBITMQ_TESTS", matches = "true")
     @org.springframework.security.test.context.support.WithMockUser(roles = "ADMIN")
     void brokerGetsOnlyCommittedEventsAndKeepsThemWithoutConsumer() throws Exception {
