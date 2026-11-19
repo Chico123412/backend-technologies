@@ -24,6 +24,7 @@ import static org.mockito.Mockito.*;
 @ExtendWith(MockitoExtension.class)
 class CatalogServiceTest {
     @Mock ServiceRepository repository;
+    @Mock com.autoservice.messaging.CatalogEventOutbox outbox;
     @Spy ServiceMapper mapper = Mappers.getMapper(ServiceMapper.class);
     @InjectMocks CatalogService service;
     @Captor ArgumentCaptor<ServiceItem> itemCaptor;

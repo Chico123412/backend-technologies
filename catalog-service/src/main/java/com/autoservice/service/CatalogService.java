@@ -5,6 +5,7 @@ import com.autoservice.dto.ServiceRequest;
 import com.autoservice.dto.ServiceResponse;
 import com.autoservice.entity.ServiceItem;
 import com.autoservice.mapper.ServiceMapper;
+import com.autoservice.messaging.CatalogEventOutbox;
 import com.autoservice.repository.ServiceRepository;
 import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
@@ -19,10 +20,12 @@ import java.util.List;
 public class CatalogService {
     private final ServiceRepository repository;
     private final ServiceMapper mapper;
+    private final CatalogEventOutbox outbox;
 
-    public CatalogService(ServiceRepository repository, ServiceMapper mapper) {
+    public CatalogService(ServiceRepository repository, ServiceMapper mapper, CatalogEventOutbox outbox) {
         this.repository = repository;
         this.mapper = mapper;
+        this.outbox = outbox;
     }
 
     public List<ServiceResponse> findAll() {
@@ -37,7 +40,9 @@ public class CatalogService {
     @Transactional
     @PreAuthorize("hasRole('ADMIN')")
     public ServiceResponse create(ServiceRequest request) {
-        return mapper.toResponse(repository.save(mapper.toEntity(request)));
+        ServiceResponse item = mapper.toResponse(repository.save(mapper.toEntity(request)));
+        outbox.record("CREATED", item);
+        return item;
     }
 
     @CatalogWritable
@@ -46,14 +51,18 @@ public class CatalogService {
     public ServiceResponse update(long id, ServiceRequest request) {
         ServiceItem item = findEntity(id);
         mapper.update(request, item);
-        return mapper.toResponse(repository.save(item));
+        ServiceResponse result = mapper.toResponse(repository.save(item));
+        outbox.record("UPDATED", result);
+        return result;
     }
 
     @CatalogWritable
     @Transactional
     @PreAuthorize("hasRole('ADMIN')")
     public void delete(long id) {
-        repository.delete(findEntity(id));
+        ServiceItem item = findEntity(id);
+        repository.delete(item);
+        outbox.record("DELETED", mapper.toResponse(item));
     }
 
     private ServiceItem findEntity(long id) {

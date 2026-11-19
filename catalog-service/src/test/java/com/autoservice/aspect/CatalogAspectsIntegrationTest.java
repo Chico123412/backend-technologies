@@ -96,7 +96,7 @@ class CatalogAspectsIntegrationTest {
     static class Config {
         @Bean ServiceRepository repository() { return mock(ServiceRepository.class); }
         @Bean CatalogService catalog(ServiceRepository repository) {
-            return new CatalogService(repository, Mappers.getMapper(ServiceMapper.class));
+            return new CatalogService(repository, Mappers.getMapper(ServiceMapper.class), mock(com.autoservice.messaging.CatalogEventOutbox.class));
         }
         @Bean QuoteService quotes(CatalogService catalog) { return new QuoteService(catalog); }
         @Bean RoundMoneyAspect rounding() { return new RoundMoneyAspect(); }
